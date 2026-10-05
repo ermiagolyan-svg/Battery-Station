@@ -25,7 +25,7 @@
 
 #define BAT_MIN_V            12.0f
 #define BAT_MAX_V            16.4f 
-#define BAT_CAPACITY_MAH     20000.0f 
+#define BAT_CAPACITY_MAH     53500.0f 
 #define RF_IGNORE_AFTER_BOOT 3000
 
 #define SHUNT_CH1  0.007f 

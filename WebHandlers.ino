@@ -16,9 +16,11 @@ void handleChargerConfig() {
   if (server.hasArg("auto")) {
     chargeAutoMode = server.arg("auto").toInt() == 1;
   }
+  if (server.hasArg("en")) {
+    chargerMasterSwitch = server.arg("en").toInt() == 1;
+  }
   if (server.hasArg("current")) {
     chargeManualCurrent = server.arg("current").toFloat();
-    // تغییر لیمیت به 3.0 آمپر
     if (chargeManualCurrent > 3.0f) chargeManualCurrent = 3.0f;
     if (chargeManualCurrent < 0.1f) chargeManualCurrent = 0.1f;
   }
@@ -47,8 +49,9 @@ void handleData() {
                 ",\"r2\":"      + String(relay2State ? 1 : 0) + 
                 ",\"ip_on\":"   + String(ip2365_online ? 1 : 0) +
                 ",\"ip_mod\":"  + String(chargeAutoMode ? 1 : 0) +
+                ",\"ip_en\":"   + String(chargerMasterSwitch ? 1 : 0) + // ارسال استاتوس دکمه مستر
                 ",\"ip_cur\":"  + String(chargeManualCurrent, 2) +
                 ",\"ip_tgt\":"  + String(currentSetPoint, 2) +
-                ",\"ip_st\":"   + String(chargeComplete ? 2 : 1) + "}"; // خطایابی استاتوس آپدیت شد
+                ",\"ip_st\":"   + String(chargeComplete ? 2 : 1) + "}";
   server.send(200, "application/json", json);
 }

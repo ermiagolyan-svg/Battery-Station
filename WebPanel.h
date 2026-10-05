@@ -80,17 +80,20 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     .bat-text-large { font-size: 28px; font-weight: 800; font-family: monospace; color: #fff; display: flex; align-items: baseline; }
     .bat-text-large span { font-size: 14px; color: #94a3b8; margin-right: 4px; }
     
-    .flow-diagram { width: 100%; height: 80px; position: relative; margin: 10px 0; }
+    .flow-diagram { width: 100%; height: 130px; position: relative; margin: 15px 0; }
     .flow-node {
       position: absolute; background: #1e293b; border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 12px; padding: 8px 5px; text-align: center; width: 80px; z-index: 2;
+      border-radius: 12px; padding: 8px 2px; text-align: center; width: 75px; z-index: 2;
       box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
     .flow-node-title { font-size: 10px; color: #94a3b8; }
     .flow-node-val { font-size: 12px; font-weight: bold; color: #fff; font-family: monospace; margin-top: 2px;}
-    #node-in { left: 0; top: 50%; transform: translateY(-50%); }
-    #node-chg { left: 50%; top: 50%; transform: translate(-50%, -50%); border-color: #38bdf8; }
-    #node-bat { right: 0; top: 50%; transform: translateY(-50%); }
+    
+    #node-in { left: 2%; top: 25%; transform: translateY(-50%); }
+    #node-chg { left: 50%; top: 25%; transform: translate(-50%, -50%); border-color: #38bdf8; }
+    #node-bat { right: 2%; top: 25%; transform: translateY(-50%); }
+    #node-com { left: 50%; top: 85%; transform: translate(-50%, -50%); border-color: #10b981; }
+    
     .flow-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
     .flow-line { stroke: #334155; stroke-width: 3; fill: none; stroke-linecap: round; }
     .flow-particle {
@@ -175,10 +178,21 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <div class="card-title"><i class="fa-solid fa-network-wired"></i> گراف جریان توان زنده</div>
     <div class="flow-diagram">
         <svg class="flow-svg">
-            <line x1="15%" y1="50%" x2="45%" y2="50%" class="flow-line" />
-            <line x1="15%" y1="50%" x2="45%" y2="50%" class="flow-particle" id="flow-in" />
-            <line x1="55%" y1="50%" x2="85%" y2="50%" class="flow-line" />
-            <line x1="55%" y1="50%" x2="85%" y2="50%" class="flow-particle" id="flow-bat" />
+            <!-- مسیر DC به شارژر -->
+            <line x1="15%" y1="25%" x2="50%" y2="25%" class="flow-line" />
+            <line x1="15%" y1="25%" x2="50%" y2="25%" class="flow-particle" id="flow-dc-chg" />
+            
+            <!-- مسیر شارژر به باتری -->
+            <line x1="50%" y1="25%" x2="85%" y2="25%" class="flow-line" />
+            <line x1="50%" y1="25%" x2="85%" y2="25%" class="flow-particle" id="flow-chg-bat" />
+            
+            <!-- مسیر DC به مصرف‌کننده -->
+            <line x1="15%" y1="25%" x2="50%" y2="85%" class="flow-line" />
+            <line x1="15%" y1="25%" x2="50%" y2="85%" class="flow-particle" id="flow-dc-com" />
+            
+            <!-- مسیر باتری به مصرف‌کننده -->
+            <line x1="85%" y1="25%" x2="50%" y2="85%" class="flow-line" />
+            <line x1="85%" y1="25%" x2="50%" y2="85%" class="flow-particle" id="flow-bat-com" />
         </svg>
         <div class="flow-node" id="node-in">
             <div class="flow-node-title">ورودی DC</div>
@@ -192,6 +206,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             <div class="flow-node-title">باتری پک</div>
             <div class="flow-node-val" id="f_bat">0.0W</div>
         </div>
+        <!-- گره جدید بار مصرفی -->
+        <div class="flow-node" id="node-com">
+            <div class="flow-node-title">بار مصرفی</div>
+            <div class="flow-node-val" id="f_com">0.0W</div>
+        </div>
     </div>
   </div>
 
@@ -200,6 +219,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <div class="ctrl-row">
       <span>وضعیت پایش:</span>
       <span id="ip_status_txt" style="font-size:12px; font-weight:bold; color:#38bdf8; background:rgba(56,189,248,0.1); padding:4px 8px; border-radius:8px;">بررسی...</span>
+    </div>
+    <div class="ctrl-row">
+      <span>روشن / خاموش کردن شارژر</span>
+      <label class="switch"><input type="checkbox" id="chkEnable" onchange="setCharger()"><span class="slider"></span></label>
     </div>
     <div class="ctrl-row">
       <span>مدیریت حرارتی اتوماتیک</span>
@@ -224,7 +247,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         <div class="stat-value" id="t_b2">--</div><div class="stat-label">سنسور بانک ۲</div>
       </div>
       <div class="stat-box" style="grid-column: 1/-1; background: rgba(239,68,68,0.05); border-color: rgba(239,68,68,0.15)">
-        <div class="stat-value" id="t_chg" style="color:#ef4444;">--</div><div class="stat-label" style="color:#fca5a5;">دمای هیت‌سینک شارژر</div>
+        <div class="stat-value" id="t_chg" style="color:#ef4444;">--</div><div class="stat-label" style="color:#fca5a5;">دمای هیت‌‌سینک شارژر</div>
       </div>
     </div>
   </div>
@@ -284,7 +307,6 @@ function toggleRelay(ch) {
   if (navigator.vibrate) navigator.vibrate(50);
   fetch('/relay?ch=' + ch).then(()=>loadData());
   
-  // پیش‌نمایش سریع استاتوس
   const btn = document.getElementById('btnRelay' + ch);
   btn.classList.toggle('active');
 }
@@ -292,19 +314,18 @@ function toggleRelay(ch) {
 function setCharger() {
   if (navigator.vibrate) navigator.vibrate(50);
   let isAuto = document.getElementById('chkAuto').checked ? 1 : 0;
+  let isEn = document.getElementById('chkEnable').checked ? 1 : 0; 
   let val = document.getElementById('curSlider').value;
-  fetch('/chargerConfig?auto=' + isAuto + '&current=' + val).then(()=>loadData());
+  fetch('/chargerConfig?auto=' + isAuto + '&en=' + isEn + '&current=' + val).then(()=>loadData());
 }
 
 function loadData(){
   fetch('/data').then(r=>r.json()).then(d=>{
     document.getElementById('v1').textContent = d.v1.toFixed(2);
     document.getElementById('i1').textContent = d.i1.toFixed(2);
-    document.getElementById('f_bat').textContent = d.p1.toFixed(1) + "W";
     
     document.getElementById('v2').textContent = d.v2.toFixed(2);
     document.getElementById('i2').textContent = d.i2.toFixed(2);
-    document.getElementById('f_in').textContent = d.p2.toFixed(1) + "W";
 
     document.getElementById('v3').textContent = d.v3.toFixed(2);
     document.getElementById('i3').textContent = d.i3.toFixed(2);
@@ -336,22 +357,65 @@ function loadData(){
       badge.style.borderColor = "rgba(239, 68, 68, 0.3)";
     }
 
-    let flowIn = document.getElementById('flow-in');
-    let flowBat = document.getElementById('flow-bat');
+    let p_dc = d.p2;
+    let p_bat = d.p1;
+    let p_com = 0.0;
+    let p_charger_in = 0.0; 
     
-    if (d.p2 > 0.5) { flowIn.classList.add('active'); } else { flowIn.classList.remove('active'); }
-    if (d.charging === 1 || d.i1 < -0.2) { 
-        flowBat.classList.add('active'); 
-        if(d.i1 < -0.2) flowBat.style.stroke = "#f59e0b"; 
-        else flowBat.style.stroke = "#10b981"; 
-    } else { 
-        flowBat.classList.remove('active'); 
+    let p_micro = 0.95; 
+    
+    if (d.dc_in === 1) {
+        if (d.charging === 1) {
+            p_charger_in = p_bat / 0.800; 
+            p_com = p_dc - p_charger_in - p_micro;
+            if (p_com < 0) p_com = 0; 
+        } else {
+            p_com = p_dc - p_micro; 
+        }
+    } else {
+        p_com = p_bat - p_micro; 
+    }
+
+    document.getElementById('f_in').textContent = p_dc.toFixed(1) + "W";
+    document.getElementById('f_bat').textContent = p_bat.toFixed(1) + "W";
+    document.getElementById('f_com').textContent = p_com.toFixed(1) + "W";
+
+    let flowDcChg = document.getElementById('flow-dc-chg');
+    let flowChgBat = document.getElementById('flow-chg-bat');
+    let flowDcCom = document.getElementById('flow-dc-com');
+    let flowBatCom = document.getElementById('flow-bat-com');
+    
+    flowDcChg.classList.remove('active');
+    flowChgBat.classList.remove('active');
+    flowDcCom.classList.remove('active');
+    flowBatCom.classList.remove('active');
+    
+    if (d.dc_in === 1) {
+        if (p_com > 0.5) {
+            flowDcCom.classList.add('active'); 
+        }
+        
+        if (d.charging === 1) {
+            flowDcChg.classList.add('active');
+            flowChgBat.classList.add('active');
+            flowChgBat.style.stroke = "#10b981"; 
+        }
+    } else {
+        if (p_com > 0.5) {
+            flowBatCom.classList.add('active');
+            flowBatCom.style.stroke = "#f59e0b"; 
+        }
     }
 
     document.getElementById('btnRelay1').className = (d.r1 === 1) ? 'relay-btn active' : 'relay-btn';
     document.getElementById('btnRelay2').className = (d.r2 === 1) ? 'relay-btn active' : 'relay-btn';
 
     document.getElementById('chkAuto').checked = (d.ip_mod === 1);
+    
+    if (document.getElementById('chkEnable')) {
+        document.getElementById('chkEnable').checked = (d.ip_en === 1); 
+    }
+
     if(document.activeElement !== document.getElementById('curSlider')) {
        document.getElementById('curSlider').value = d.ip_cur;
        document.getElementById('curVal').innerText = parseFloat(d.ip_cur).toFixed(2) + ' A';
@@ -359,18 +423,23 @@ function loadData(){
 
     let ipStTxt = "آفلاین / قطعی برق";
     document.getElementById('ip_txt').innerText = "OFF";
+    
     if (d.ip_on === 1) {
-       if (d.ip_st === 2) { 
+       if (d.ip_en === 0) {
+           ipStTxt = "🛑 خاموش (دستی)"; 
+           document.getElementById('ip_txt').innerText = "DISABLED"; 
+       }
+       else if (d.ip_st === 2) { 
            ipStTxt = "✅ فول شارژ (Float)"; 
            document.getElementById('ip_txt').innerText = "FULL"; 
        }
-       else if (d.ip_st === 1) { 
-           ipStTxt = "⏳ توقف (سنجش ولتاژ)"; 
-           document.getElementById('ip_txt').innerText = "MEASURE"; 
+       else if (d.charging === 1) { 
+           ipStTxt = "⚡ تزریق (" + d.ip_tgt.toFixed(2) + "A)"; 
+           document.getElementById('ip_txt').innerText = p_charger_in.toFixed(1) + "W"; 
        }
        else { 
-           ipStTxt = "⚡ تزریق (" + d.ip_tgt.toFixed(2) + "A)"; 
-           document.getElementById('ip_txt').innerText = "ACTIVE"; 
+           ipStTxt = "⏳ توقف (سنجش ولتاژ)"; 
+           document.getElementById('ip_txt').innerText = "IDLE"; 
        }
     }
     document.getElementById('ip_status_txt').innerText = ipStTxt;

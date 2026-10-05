@@ -32,8 +32,8 @@ bool  isCharging      = false;
 bool  hasDirectPower  = false; 
 bool  oledNeedsUpdate = true;
 
-bool rf1Last = HIGH, rf2Last = HIGH;
-bool rf3Last = HIGH, rf4Last = HIGH;
+bool rf1Last = LOW, rf2Last = LOW;
+bool rf3Last = LOW, rf4Last = LOW;
 
 unsigned long lastMeasure = 0;
 unsigned long lastOLED    = 0;
@@ -42,6 +42,7 @@ unsigned long bootTime    = 0;
 bool  ip2365_online        = false;
 bool  ip2365_initialized   = false;
 bool  chargeAutoMode       = true;
+bool  chargerMasterSwitch  = true;
 float chargeManualCurrent  = 1.15f;
 float currentSetPoint      = 0.0f;
 bool  isChargePaused       = false;
@@ -57,22 +58,23 @@ void checkRF() {
   if (millis() - bootTime < RF_IGNORE_AFTER_BOOT) return;
 
   if (digitalRead(RF_VT) == HIGH) {
-    bool ch1 = digitalRead(RF_CH1);
-    bool ch2 = digitalRead(RF_CH2);
-    bool ch3 = digitalRead(RF_CH3);
-    bool ch4 = digitalRead(RF_CH4);
+    bool ch1 = digitalRead(RF_CH1); // D3 (معمولاً کلید D)
+    bool ch2 = digitalRead(RF_CH2); // D2 (معمولاً کلید C)
+    bool ch3 = digitalRead(RF_CH3); // D1 (معمولاً کلید B)
+    bool ch4 = digitalRead(RF_CH4); // D0 (معمولاً کلید A)
 
-    if (ch1 == LOW && rf1Last == HIGH) { relay1State = !relay1State; setRelay(RELAY1_PIN, relay1State); oledNeedsUpdate = true; }
-    if (ch2 == LOW && rf2Last == HIGH) { relay2State = !relay2State; setRelay(RELAY2_PIN, relay2State); oledNeedsUpdate = true; }
-    if (ch3 == LOW && rf3Last == HIGH) { relay1State = false; relay2State = false; setRelay(RELAY1_PIN, false); setRelay(RELAY2_PIN, false); oledNeedsUpdate = true; }
-    if (ch4 == LOW && rf4Last == HIGH) { relay1State = true;  relay2State = true;  setRelay(RELAY1_PIN, true);  setRelay(RELAY2_PIN, true);  oledNeedsUpdate = true; }
+    // در حالت پول‌داون، کلید فشرده شده HIGH می‌شود
+    if (ch4 == HIGH && rf4Last == LOW) { relay1State = !relay1State; setRelay(RELAY1_PIN, relay1State); oledNeedsUpdate = true; } // کلید A: مدار اول
+    if (ch3 == HIGH && rf3Last == LOW) { relay2State = !relay2State; setRelay(RELAY2_PIN, relay2State); oledNeedsUpdate = true; } // کلید B: مدار دوم
+    if (ch2 == HIGH && rf2Last == LOW) { relay1State = false; relay2State = false; setRelay(RELAY1_PIN, false); setRelay(RELAY2_PIN, false); oledNeedsUpdate = true; } // کلید C: همه خاموش
+    if (ch1 == HIGH && rf1Last == LOW) { relay1State = true;  relay2State = true;  setRelay(RELAY1_PIN, true);  setRelay(RELAY2_PIN, true);  oledNeedsUpdate = true; } // کلید D: همه روشن
 
     rf1Last = ch1; rf2Last = ch2; rf3Last = ch3; rf4Last = ch4;
   } else {
-    rf1Last = HIGH; 
-    rf2Last = HIGH; 
-    rf3Last = HIGH; 
-    rf4Last = HIGH;
+    rf1Last = LOW; 
+    rf2Last = LOW; 
+    rf3Last = LOW; 
+    rf4Last = LOW;
   }
 }
 
@@ -86,10 +88,10 @@ void setup() {
   setRelay(RELAY2_PIN, false);
 
   pinMode(RF_VT,  INPUT); 
-  pinMode(RF_CH1, INPUT_PULLUP);
-  pinMode(RF_CH2, INPUT_PULLUP);
-  pinMode(RF_CH3, INPUT_PULLUP);
-  pinMode(RF_CH4, INPUT_PULLUP);
+  pinMode(RF_CH1, INPUT_PULLDOWN);
+  pinMode(RF_CH2, INPUT_PULLDOWN);
+  pinMode(RF_CH3, INPUT_PULLDOWN);
+  pinMode(RF_CH4, INPUT_PULLDOWN);
 
   sensors.begin();
 
@@ -102,6 +104,7 @@ void setup() {
   ina3221.setShuntR(2, SHUNT_CH3);
 
   if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
+    display.setRotation(2);
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);

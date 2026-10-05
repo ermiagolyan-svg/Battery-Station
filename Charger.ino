@@ -36,7 +36,7 @@ void manageIP2365() {
 
     if (!ip2365_initialized) {
       uint8_t r0F = readIP2365(0x0F);
-      writeIP2365(0x0F, r0F & ~0x0C); 
+      writeIP2365(0x0F, r0F & ~0x0C); // باز کردن قفل سخت‌افزاری مقاومت‌ها
       
       uint8_t r05 = readIP2365(0x05);
       writeIP2365(0x05, r05 & ~0x01); 
@@ -45,74 +45,81 @@ void manageIP2365() {
       chargeComplete = false;
     }
 
+    bool shouldCharge = true;
+
+    if (!chargerMasterSwitch) {
+      shouldCharge = false;
+    }
+
     if (chargeComplete) {
-      // اگر باتری 0.4 ولت افت کرد، دوباره سیکل شارژ از سر گرفته بشه
       if (v_bat < BAT_MAX_V - 0.4f) {
         chargeComplete = false;
       } else {
-        enableIP2365Charge(false);
-        currentSetPoint = 0.0f;
-        return;
+        shouldCharge = false;
       }
     }
 
-    // محاسبه جریان هدف اولیه
-    float target = chargeManualCurrent; 
+    float target = 0.0f;
 
-    if (chargeAutoMode) {
-      // کنترل دمای باتری (اولویت اول)
-      float maxBatTemp = max(tempBank1, tempBank2);
-      if (maxBatTemp > 45.0f) {
-        target = 0.0f; 
-      } else if (maxBatTemp > 35.0f || maxBatTemp < 5.0f) {
-        target = 0.5f; 
-      } else {
-        target = 3.0f; // شارژ با حداکثر سرعت 3 آمپر در حالت اتوماتیک
-      }
+    if (shouldCharge) {
+      target = chargeManualCurrent; 
 
-      // کنترل حرارتی نزولی هیت‌سینک شارژر
-      if (tempCharger >= 90.0f) {
-        target = 0.0f; // قطع کامل در 90 درجه
-      } else if (tempCharger > 75.0f) {
-        // کاهش خطی جریان بین 75 تا 90 درجه (در 85 درجه حدود 33٪ جریان تارگت اعمال میشه)
-        float derateFactor = (90.0f - tempCharger) / 15.0f;
-        target = target * derateFactor;
-      }
-    }
-
-    // الگوریتم هوشمند CC/CV (بدون قطع و وصل رله)
-    if (target > 0.0f) {
-      if (now - lastCVAdjust > 2000) { // تنظیم نرم هر 2 ثانیه برای جلوگیری از نوسان
-        if (v_bat >= BAT_MAX_V) {
-          currentSetPoint -= 0.1f; // فاز CV: کاهش پله‌ای جریان برای تثبیت ولتاژ
-        } else if (v_bat < BAT_MAX_V - 0.05f) {
-          currentSetPoint += 0.1f; // فاز CC: افزایش جریان تا رسیدن به تارگت مجاز
+      if (chargeAutoMode) {
+        float maxBatTemp = max(tempBank1, tempBank2);
+        if (maxBatTemp > 45.0f) {
+          target = 0.0f; 
+        } else if (maxBatTemp > 35.0f || maxBatTemp < 5.0f) {
+          target = 0.5f; 
+        } else {
+          target = 3.0f; 
         }
-        lastCVAdjust = now;
-      }
-      
-      // کلمپ کردن (محدود کردن) جریان بین صفر و تارگت محاسبه‌شده
-      if (currentSetPoint > target) currentSetPoint = target;
-      if (currentSetPoint < 0.1f) currentSetPoint = 0.0f;
 
-      // تشخیص پایان شارژ (ولتاژ در سقف و جریان بسیار ضعیف شده)
-      if (v_bat >= BAT_MAX_V - 0.05f && currentSetPoint <= 0.15f && currentSetPoint > 0.0f) {
-         chargeComplete = true;
-         enableIP2365Charge(false);
-         currentSetPoint = 0.0f;
-         return;
+        if (tempCharger >= 90.0f) {
+          target = 0.0f; 
+        } else if (tempCharger > 75.0f) {
+          float derateFactor = (90.0f - tempCharger) / 15.0f;
+          target = target * derateFactor;
+        }
       }
-      
-    } else {
-      currentSetPoint = 0.0f;
+
+      if (target > 0.0f) {
+        if (now - lastCVAdjust > 2000) { 
+          if (v_bat >= BAT_MAX_V) {
+            currentSetPoint -= 0.1f; 
+          } else if (v_bat < BAT_MAX_V - 0.05f) {
+            currentSetPoint += 0.1f; 
+          }
+          lastCVAdjust = now;
+        }
+        
+        if (currentSetPoint > target) currentSetPoint = target;
+        if (currentSetPoint < 0.1f) currentSetPoint = 0.0f;
+
+        if (v_bat >= BAT_MAX_V - 0.05f && currentSetPoint <= 0.15f && currentSetPoint > 0.0f) {
+           chargeComplete = true;
+           shouldCharge = false;
+        }
+        
+      } else {
+        currentSetPoint = 0.0f;
+        shouldCharge = false;
+      }
     }
 
-    // اعمال نهایی جریان به آی‌سی
-    if (currentSetPoint < 0.1f) {
+    // ارسال دائم فرامین به آی‌سی (جلوگیری از تایم‌اوت و اعمال قطعی خاموشی)
+    if (!shouldCharge || currentSetPoint < 0.1f) {
+      uint8_t current_r1F = readIP2365(0x1F); 
+      uint8_t new_r1F = (current_r1F & 0xC0) | 0x00; // تزریق صفر مطلق به رجیستر جریان
+      writeIP2365(0x1F, new_r1F); 
       enableIP2365Charge(false);
+      currentSetPoint = 0.0f;
     } else {
       uint8_t hexVal = round((currentSetPoint - 0.05f) / 0.1f);
-      writeIP2365(0x1F, hexVal);
+      if (hexVal > 0x3F) hexVal = 0x3F;
+      
+      uint8_t current_r1F = readIP2365(0x1F); 
+      uint8_t new_r1F = (current_r1F & 0xC0) | hexVal; 
+      writeIP2365(0x1F, new_r1F); 
       enableIP2365Charge(true);
     }
     
