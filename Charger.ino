@@ -1,3 +1,4 @@
+// ─── توابع ارتباط با IP2365 ───────────────────
 uint8_t readIP2365(uint8_t reg) {
   Wire.beginTransmission(IP2365_ADDR);
   Wire.write(reg);
@@ -23,7 +24,9 @@ void enableIP2365Charge(bool enable) {
 
 void manageIP2365() {
   static unsigned long lastIPCheck = 0;
+  static unsigned long lastCVAdjust = 0;
   unsigned long now = millis();
+  
   if (now - lastIPCheck < 1000) return; 
   lastIPCheck = now;
 
@@ -40,56 +43,79 @@ void manageIP2365() {
 
       ip2365_initialized = true;
       chargeComplete = false;
-      isChargePaused = false;
-      lastChargeCycleStart = now;
     }
 
     if (chargeComplete) {
-      enableIP2365Charge(false);
-      currentSetPoint = 0.0f;
-      return;
-    }
-
-    if (!isChargePaused && (now - lastChargeCycleStart > 60000)) { 
-      enableIP2365Charge(false); 
-      isChargePaused = true;
-      lastChargePauseTime = now;
-    } 
-    else if (isChargePaused && (now - lastChargePauseTime > 2000)) { 
-      if (v_bat >= BAT_MAX_V) { 
-        chargeComplete = true; 
-        enableIP2365Charge(false);
+      // اگر باتری 0.4 ولت افت کرد، دوباره سیکل شارژ از سر گرفته بشه
+      if (v_bat < BAT_MAX_V - 0.4f) {
+        chargeComplete = false;
       } else {
-        isChargePaused = false;
-        lastChargeCycleStart = now;
-        enableIP2365Charge(true); 
+        enableIP2365Charge(false);
+        currentSetPoint = 0.0f;
+        return;
       }
     }
 
-    if (!isChargePaused && !chargeComplete) {
-      float target = chargeManualCurrent;
-      
-      if (chargeAutoMode) {
-        float maxTemp = max(tempBank1, tempBank2);
-        if (maxTemp > 45.0f || tempCharger > 60.0f) {
-          target = 0.0f; 
-        } else if (maxTemp > 35.0f || maxTemp < 5.0f) {
-          target = 0.5f; 
-        } else {
-          target = 1.15f; 
+    // محاسبه جریان هدف اولیه
+    float target = chargeManualCurrent; 
+
+    if (chargeAutoMode) {
+      // کنترل دمای باتری (اولویت اول)
+      float maxBatTemp = max(tempBank1, tempBank2);
+      if (maxBatTemp > 45.0f) {
+        target = 0.0f; 
+      } else if (maxBatTemp > 35.0f || maxBatTemp < 5.0f) {
+        target = 0.5f; 
+      } else {
+        target = 3.0f; // شارژ با حداکثر سرعت 3 آمپر در حالت اتوماتیک
+      }
+
+      // کنترل حرارتی نزولی هیت‌سینک شارژر
+      if (tempCharger >= 90.0f) {
+        target = 0.0f; // قطع کامل در 90 درجه
+      } else if (tempCharger > 75.0f) {
+        // کاهش خطی جریان بین 75 تا 90 درجه (در 85 درجه حدود 33٪ جریان تارگت اعمال میشه)
+        float derateFactor = (90.0f - tempCharger) / 15.0f;
+        target = target * derateFactor;
+      }
+    }
+
+    // الگوریتم هوشمند CC/CV (بدون قطع و وصل رله)
+    if (target > 0.0f) {
+      if (now - lastCVAdjust > 2000) { // تنظیم نرم هر 2 ثانیه برای جلوگیری از نوسان
+        if (v_bat >= BAT_MAX_V) {
+          currentSetPoint -= 0.1f; // فاز CV: کاهش پله‌ای جریان برای تثبیت ولتاژ
+        } else if (v_bat < BAT_MAX_V - 0.05f) {
+          currentSetPoint += 0.1f; // فاز CC: افزایش جریان تا رسیدن به تارگت مجاز
         }
+        lastCVAdjust = now;
       }
       
-      currentSetPoint = target;
+      // کلمپ کردن (محدود کردن) جریان بین صفر و تارگت محاسبه‌شده
+      if (currentSetPoint > target) currentSetPoint = target;
+      if (currentSetPoint < 0.1f) currentSetPoint = 0.0f;
 
-      if (target < 0.1f) {
-        enableIP2365Charge(false);
-      } else {
-        uint8_t hexVal = round((target - 0.05f) / 0.1f);
-        writeIP2365(0x1F, hexVal);
-        enableIP2365Charge(true);
+      // تشخیص پایان شارژ (ولتاژ در سقف و جریان بسیار ضعیف شده)
+      if (v_bat >= BAT_MAX_V - 0.05f && currentSetPoint <= 0.15f && currentSetPoint > 0.0f) {
+         chargeComplete = true;
+         enableIP2365Charge(false);
+         currentSetPoint = 0.0f;
+         return;
       }
+      
+    } else {
+      currentSetPoint = 0.0f;
     }
+
+    // اعمال نهایی جریان به آی‌سی
+    if (currentSetPoint < 0.1f) {
+      enableIP2365Charge(false);
+    } else {
+      uint8_t hexVal = round((currentSetPoint - 0.05f) / 0.1f);
+      writeIP2365(0x1F, hexVal);
+      enableIP2365Charge(true);
+    }
+    
   } else {
     ip2365_online = false;
     ip2365_initialized = false;

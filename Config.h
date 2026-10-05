@@ -20,7 +20,7 @@
 #define SCREEN_WIDTH         128
 #define SCREEN_HEIGHT        64
 #define OLED_ADDR            0x3C
-#define INA3221_ADDR         0x41 
+#define INA3221_ADDR         0x40 
 #define IP2365_ADDR          0x75 
 
 #define BAT_MIN_V            12.0f

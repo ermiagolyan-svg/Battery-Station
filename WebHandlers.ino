@@ -18,7 +18,8 @@ void handleChargerConfig() {
   }
   if (server.hasArg("current")) {
     chargeManualCurrent = server.arg("current").toFloat();
-    if (chargeManualCurrent > 2.0f) chargeManualCurrent = 2.0f;
+    // تغییر لیمیت به 3.0 آمپر
+    if (chargeManualCurrent > 3.0f) chargeManualCurrent = 3.0f;
     if (chargeManualCurrent < 0.1f) chargeManualCurrent = 0.1f;
   }
   server.send(200, "text/plain", "OK");
@@ -48,6 +49,6 @@ void handleData() {
                 ",\"ip_mod\":"  + String(chargeAutoMode ? 1 : 0) +
                 ",\"ip_cur\":"  + String(chargeManualCurrent, 2) +
                 ",\"ip_tgt\":"  + String(currentSetPoint, 2) +
-                ",\"ip_st\":"   + String(chargeComplete ? 2 : (isChargePaused ? 1 : 0)) + "}";
+                ",\"ip_st\":"   + String(chargeComplete ? 2 : 1) + "}"; // خطایابی استاتوس آپدیت شد
   server.send(200, "application/json", json);
 }
