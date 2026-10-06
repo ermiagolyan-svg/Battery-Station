@@ -21,7 +21,8 @@ void handleChargerConfig() {
   }
   if (server.hasArg("current")) {
     chargeManualCurrent = server.arg("current").toFloat();
-    if (chargeManualCurrent > 3.0f) chargeManualCurrent = 3.0f;
+    // محدودکننده به سقف ۲ آمپر تغییر یافت
+    if (chargeManualCurrent > 2.0f) chargeManualCurrent = 2.0f;
     if (chargeManualCurrent < 0.1f) chargeManualCurrent = 0.1f;
   }
   server.send(200, "text/plain", "OK");
@@ -49,7 +50,7 @@ void handleData() {
                 ",\"r2\":"      + String(relay2State ? 1 : 0) + 
                 ",\"ip_on\":"   + String(ip2365_online ? 1 : 0) +
                 ",\"ip_mod\":"  + String(chargeAutoMode ? 1 : 0) +
-                ",\"ip_en\":"   + String(chargerMasterSwitch ? 1 : 0) + // ارسال استاتوس دکمه مستر
+                ",\"ip_en\":"   + String(chargerMasterSwitch ? 1 : 0) + 
                 ",\"ip_cur\":"  + String(chargeManualCurrent, 2) +
                 ",\"ip_tgt\":"  + String(currentSetPoint, 2) +
                 ",\"ip_st\":"   + String(chargeComplete ? 2 : 1) + "}";

@@ -178,19 +178,15 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <div class="card-title"><i class="fa-solid fa-network-wired"></i> گراف جریان توان زنده</div>
     <div class="flow-diagram">
         <svg class="flow-svg">
-            <!-- مسیر DC به شارژر -->
             <line x1="15%" y1="25%" x2="50%" y2="25%" class="flow-line" />
             <line x1="15%" y1="25%" x2="50%" y2="25%" class="flow-particle" id="flow-dc-chg" />
             
-            <!-- مسیر شارژر به باتری -->
             <line x1="50%" y1="25%" x2="85%" y2="25%" class="flow-line" />
             <line x1="50%" y1="25%" x2="85%" y2="25%" class="flow-particle" id="flow-chg-bat" />
             
-            <!-- مسیر DC به مصرف‌کننده -->
             <line x1="15%" y1="25%" x2="50%" y2="85%" class="flow-line" />
             <line x1="15%" y1="25%" x2="50%" y2="85%" class="flow-particle" id="flow-dc-com" />
             
-            <!-- مسیر باتری به مصرف‌کننده -->
             <line x1="85%" y1="25%" x2="50%" y2="85%" class="flow-line" />
             <line x1="85%" y1="25%" x2="50%" y2="85%" class="flow-particle" id="flow-bat-com" />
         </svg>
@@ -206,7 +202,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             <div class="flow-node-title">باتری پک</div>
             <div class="flow-node-val" id="f_bat">0.0W</div>
         </div>
-        <!-- گره جدید بار مصرفی -->
         <div class="flow-node" id="node-com">
             <div class="flow-node-title">بار مصرفی</div>
             <div class="flow-node-val" id="f_com">0.0W</div>
@@ -233,7 +228,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         <span style="font-size:13px; color:#cbd5e1;">محدودیت جریان شارژ</span>
         <span id="curVal" style="font-weight:bold; font-family:monospace; font-size:16px; color:#38bdf8;">1.15 A</span>
       </div>
-      <input type="range" id="curSlider" min="0.1" max="3.0" step="0.1" value="1.15" onchange="setCharger()" oninput="document.getElementById('curVal').innerText = parseFloat(this.value).toFixed(2) + ' A'">
+      <!-- مقدار max در خط زیر به 2.0 محدود شد -->
+      <input type="range" id="curSlider" min="0.1" max="2.0" step="0.1" value="1.15" onchange="setCharger()" oninput="document.getElementById('curVal').innerText = parseFloat(this.value).toFixed(2) + ' A'">
     </div>
   </div>
 
@@ -366,15 +362,21 @@ function loadData(){
     
     if (d.dc_in === 1) {
         if (d.charging === 1) {
-            p_charger_in = p_bat / 0.800; 
+            p_charger_in = p_bat / 0.90; 
+            if (p_charger_in > (p_dc - p_micro)) {
+                p_charger_in = p_dc - p_micro;
+            }
+            if (p_charger_in < 0) p_charger_in = 0.0;
+            
             p_com = p_dc - p_charger_in - p_micro;
-            if (p_com < 0) p_com = 0; 
         } else {
             p_com = p_dc - p_micro; 
         }
     } else {
         p_com = p_bat - p_micro; 
     }
+
+    if (p_com < 0) p_com = 0.0; 
 
     document.getElementById('f_in').textContent = p_dc.toFixed(1) + "W";
     document.getElementById('f_bat').textContent = p_bat.toFixed(1) + "W";
@@ -447,7 +449,7 @@ function loadData(){
 }
 
 window.addEventListener('load', loadData);
-setInterval(loadData, 1500);
+setInterval(loadData, 500);
 </script>
 </body>
 </html>

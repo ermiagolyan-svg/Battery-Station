@@ -36,11 +36,13 @@ void manageIP2365() {
 
     if (!ip2365_initialized) {
       uint8_t r0F = readIP2365(0x0F);
-      writeIP2365(0x0F, r0F & ~0x0C); // باز کردن قفل سخت‌افزاری مقاومت‌ها
+      writeIP2365(0x0F, r0F & ~0x0C); 
       
       uint8_t r05 = readIP2365(0x05);
       writeIP2365(0x05, r05 & ~0x01); 
-
+      
+      writeIP2365(0x19, 0x14);
+      
       ip2365_initialized = true;
       chargeComplete = false;
     }
@@ -62,6 +64,7 @@ void manageIP2365() {
     float target = 0.0f;
 
     if (shouldCharge) {
+      // مبنای اولیه دقیقاً همان عدد تنظیم شده توسط اسلایدر کاربر است
       target = chargeManualCurrent; 
 
       if (chargeAutoMode) {
@@ -69,14 +72,14 @@ void manageIP2365() {
         if (maxBatTemp > 45.0f) {
           target = 0.0f; 
         } else if (maxBatTemp > 35.0f || maxBatTemp < 5.0f) {
-          target = 0.5f; 
-        } else {
-          target = 3.0f; 
+          // اگر باتری گرم/سرد شد، جریان را به 0.5 آمپر محدود می‌کند، مگر اینکه خودتان عدد کمتری تنظیم کرده باشید
+          target = min(target, 0.5f); 
         }
 
         if (tempCharger >= 90.0f) {
           target = 0.0f; 
         } else if (tempCharger > 75.0f) {
+          // در صورت داغ شدن هیت‌سینک، جریانی که شما تنظیم کرده‌اید را به صورت درصدی پایین می‌کشد
           float derateFactor = (90.0f - tempCharger) / 15.0f;
           target = target * derateFactor;
         }
@@ -93,23 +96,23 @@ void manageIP2365() {
         }
         
         if (currentSetPoint > target) currentSetPoint = target;
-        if (currentSetPoint < 0.1f) currentSetPoint = 0.0f;
 
         if (v_bat >= BAT_MAX_V - 0.05f && currentSetPoint <= 0.15f && currentSetPoint > 0.0f) {
            chargeComplete = true;
            shouldCharge = false;
         }
         
+        if (currentSetPoint < 0.1f) currentSetPoint = 0.0f;
+
       } else {
         currentSetPoint = 0.0f;
         shouldCharge = false;
       }
     }
 
-    // ارسال دائم فرامین به آی‌سی (جلوگیری از تایم‌اوت و اعمال قطعی خاموشی)
     if (!shouldCharge || currentSetPoint < 0.1f) {
       uint8_t current_r1F = readIP2365(0x1F); 
-      uint8_t new_r1F = (current_r1F & 0xC0) | 0x00; // تزریق صفر مطلق به رجیستر جریان
+      uint8_t new_r1F = (current_r1F & 0xC0) | 0x00; 
       writeIP2365(0x1F, new_r1F); 
       enableIP2365Charge(false);
       currentSetPoint = 0.0f;

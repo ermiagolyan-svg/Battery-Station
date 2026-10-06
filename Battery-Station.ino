@@ -103,6 +103,16 @@ void setup() {
   ina3221.setShuntR(1, SHUNT_CH2);
   ina3221.setShuntR(2, SHUNT_CH3);
 
+  // ─── فعال‌سازی میانگین‌گیری سخت‌افزاری INA3221 ───
+  // ارسال هکس 0x7927 به رجیستر 0x00
+  // این تنظیمات ۱۲۸ نمونه از نویزها را گرفته و یک میانگین پایدار تحویل می‌دهد
+  Wire.beginTransmission(INA3221_ADDR);
+  Wire.write(0x00);         
+  Wire.write(0x79);         
+  Wire.write(0x27);         
+  Wire.endTransmission();
+  // ───────────────────────────────────────────────
+
   if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
     display.setRotation(2);
     display.clearDisplay();
